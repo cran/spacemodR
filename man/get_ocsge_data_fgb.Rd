@@ -61,3 +61,6 @@ FlatGeobuf driver and network capabilities (vsicurl).
 }
 
 }
+\seealso{
+\code{\link{get_ocsge}}, \code{\link{get_ocsge_data_ign}}
+}

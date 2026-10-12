@@ -4,12 +4,25 @@
 \alias{add_nohabitat}
 \title{Add non-habitat zones to a Habitat object}
 \usage{
-add_nohabitat(hab, sf_data, ...)
+add_nohabitat(hab, sf_data, priority = NULL, touches = TRUE, ...)
 }
 \arguments{
 \item{hab}{A Habitat object}
 
 \item{sf_data}{An sf object containing geometries to add}
+
+\item{priority}{Stacking order of the added layer when the habitat is
+rasterized with \code{\link{habitat_raster}}: the non-habitat zone only
+excludes the pixels where no layer of higher priority lies on top of it.
+Same default as in \code{\link{add_habitat}}: on top of everything already
+in \code{hab}.}
+
+\item{touches}{Logical, a single value for the whole layer or one value per
+feature. If \code{TRUE} (default), every pixel touched by the features is
+excluded, so that the barrier is watertight: it cannot vanish between pixel
+centres nor be crossed diagonally between two pixels. If \code{FALSE}, a
+polygon only excludes the pixels whose centre it covers and a line only the
+pixels of a thin line. See \code{\link{add_habitat}} for details.}
 
 \item{...}{Additional arguments}
 }

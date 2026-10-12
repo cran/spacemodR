@@ -1,12 +1,12 @@
 #' Transfer (food, contaminant) across trophic levels
 #'
 #' Computes the transfer through a trophic network from
-#' lower to higher trophic levels using spatial spreading and intake functions.
+#' lower to higher trophic levels using spatial spreading and flux functions.
 #'
 #' @param spacemodel A named list of spatial layers (e.g. \code{SpatRaster} objects).
 #'        Must contain an attribute \code{trophic_tbl} of class \code{trophic_tbl}.
 #' @param kernels A list of kernel parameters for each layer.
-#' @param intakes A \code{trophic_tbl} object (or compatible table) containing
+#' @param fluxes A \code{trophic_tbl} object (or compatible table) containing
 #'        normalized weights and flux functions for each trophic link.
 #' @param exposure_weighting Character. Defines how the realized exposure is calculated
 #' based on the predator's presence. Options are:
@@ -31,11 +31,11 @@
 #' \enumerate{
 #'   \item Resources (lower neighbors) are identified.
 #'   \item Concentration from each resource is spatially spread using \code{spread()}.
-#'   \item Intake is computed using \code{intake()}.
+#'   \item Flux is computed using \code{apply_flux()}.
 #'   \item Contributions from all resources are summed.
 #' }
 #'
-#' The function assumes that intake weights are already normalized so that,
+#' The function assumes that flux weights are already normalized so that,
 #' for each consumer, the sum of contributions from all resources equals 1.
 #'
 #' @return A named `spacemodel` object as a list of spatial layers representing
@@ -45,7 +45,7 @@
 transfer <- function(
     spacemodel,
     kernels,
-    intakes=NULL,
+    fluxes = NULL,
     exposure_weighting = "local",
     verbose = FALSE) {
 
@@ -99,9 +99,9 @@ transfer <- function(
         use_diffusion = use_diffusion
       )
 
-      # INTAKE / FLUX
-      if(!is.null(intakes)) {
-        out_r_map <- flux(out_r_map, intakes, from = prey_name, to = predator_name)
+      # APPLICATION DU FLUX
+      if(!is.null(fluxes)) {
+        out_r_map <- apply_flux(out_r_map, fluxes, from = prey_name, to = predator_name)
       }
       ## accumulation
       total_out <- total_out + out_r_map
@@ -111,7 +111,6 @@ transfer <- function(
   }
 
   # Reconstruction de l'objet spacemodel final
-  # Note: `raster_stack` et `spacemodel` sont des constructeurs
   stack_transfer <- raster_stack(
     raster_list = uptake_stack,
     names = names(uptake_stack)
@@ -135,7 +134,6 @@ transfer <- function(
 compute_exposure_map <- function(prey_conc, predator_hab, weight_map, kernel, use_diffusion) {
 
   # 1. Accessibilité : On ne mange que ce qui est dans sa zone d'habitat
-  # (Zone d'exclusion physique)
   accessible_prey <- terra::mask(prey_conc, predator_hab)
 
   # 2. Dispersion (OFFRE) : Potentiel de proies autour du point
@@ -167,7 +165,7 @@ compute_exposure_map <- function(prey_conc, predator_hab, weight_map, kernel, us
 #' the normalized weight and a flux function stored in the trophic table.
 #'
 #' @param raster A \code{SpatRaster} (or similar) representing exposure from the resource.
-#' @param intakes A \code{trophic_tbl} object that must contain a column
+#' @param fluxes A \code{trophic_tbl} object that must contain a column
 #'        \code{normalized_weight} and a column \code{flux}.
 #' @param from Character string, name of the source node.
 #' @param to Character string, name of the target node.
@@ -185,14 +183,14 @@ compute_exposure_map <- function(prey_conc, predator_hab, weight_map, kernel, us
 #' @return A raster object with transformed values.
 #'
 #' @export
-flux <- function(raster, intakes, from, to) {
+apply_flux <- function(raster, fluxes, from, to) {
 
-  stopifnot(inherits(intakes, "trophic_tbl"))
+  stopifnot(inherits(fluxes, "trophic_tbl"))
 
   # Extract from/to vectors from the link column
   edges <- data.frame(
-    from = sapply(intakes$link, `[[`, "from"),
-    to   = sapply(intakes$link, `[[`, "to"),
+    from = sapply(fluxes$link, `[[`, "from"),
+    to   = sapply(fluxes$link, `[[`, "to"),
     stringsAsFactors = FALSE
   )
 
@@ -204,8 +202,8 @@ flux <- function(raster, intakes, from, to) {
   }
 
   # Apply flux function and normalized weight
-  flux_fun <- intakes$flux[[idx]]
-  w <- intakes$normalized_weight[idx]
+  flux_fun <- fluxes$flux[[idx]]
+  w <- fluxes$normalized_weight[idx]
   if(!is.null(w)){
     raster[] <- w * flux_fun(raster[])
   } else{

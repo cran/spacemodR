@@ -3,17 +3,93 @@
 \docType{data}
 \name{ocsge_species_dict}
 \alias{ocsge_species_dict}
-\title{Valued weight between OCSGE layer and species}
+\title{Species habitat dictionary for OCS-GE land cover and land use}
 \format{
-An object of class \code{data.frame} with 13090 rows and 6 columns.
+A data frame with 57,035 rows (935 species x 61 classes) and 14 columns:
+\describe{
+  \item{code_cs}{Character. OCS-GE cover code, as in \code{ref_ocsge$code_cs} (e.g. \code{"CS2.2.1"}).}
+  \item{code_us}{Character. OCS-GE use code (e.g. \code{"US1.1"}), or \code{NA} on the rows giving the scores of the cover whatever its use.}
+  \item{species_name}{Character. Scientific name, genus and species separated by \code{"_"}.}
+  \item{sppID}{Character. Species identifier from the EEA source table; the first letter gives the group (A, R, B, M).}
+  \item{taxon_group}{Character. \code{"amphibian"}, \code{"reptile"}, \code{"bird"} or \code{"mammal"}.}
+  \item{suitability}{Integer (0-10). Overall habitat suitability: 0 unused or avoided, 2 marginal, 5 secondary, 8 main, 10 core habitat.}
+  \item{weight_breeding}{Integer (0-10). Value of the class as a breeding, nesting, denning, roosting or larval site.}
+  \item{weight_foraging}{Integer (0-10). Value of the class for feeding.}
+  \item{permeability}{Integer (0-10). Ease of movement through the class: 10 moves freely, 7 readily, 4 reluctantly, 1 strong barrier, 0 impassable. Accounts for flight, swimming or fossorial habits.}
+  \item{resistance}{Numeric (1-100). Derived from permeability as \code{10^(2 * (1 - permeability / 10))}: 10 gives 1, 5 gives 10, 0 gives 100.}
+  \item{habitat_breadth}{Integer. Species-level: number of cover classes (out of 14) with \code{suitability >= 5}.}
+  \item{specialization}{Numeric (0-1). Species-level: 1 minus the normalised Shannon evenness of the suitability profile over the 14 cover classes (0 generalist, 1 specialist).}
+  \item{confidence}{Integer (1-3). Species-level: 1 vague or missing source description, 2 medium, 3 detailed.}
+  \item{in_france}{Integer (0/1). Species-level: 1 if the species occurs natively and regularly in metropolitan France (expert knowledge). The dictionary covers Europe while OCS-GE covers France: filter on this column first.}
+}
 }
 \usage{
 data(ocsge_species_dict)
 }
 \description{
-Valued weight between OCSGE layer and species
+Habitat suitability, breeding, foraging and movement scores of 935 European
+terrestrial vertebrates (amphibians, reptiles, birds, mammals) for the
+French OCS-GE nomenclature: the 14 cover classes (\code{CS}), and 47
+(cover, use) pairs for which the land use (\code{US}) changes what the
+cover stands for. It has the same columns as
+\code{\link{eunis_species_dict}}, plus \code{code_us}.
+}
+\details{
+\strong{Cover rows} (\code{code_us = NA}, 935 x 14). Scores were assigned by
+a large language model (Claude Opus 5.5) reading the EEA habitat and
+avoided-habitat descriptions of each species against an ecological
+description of each cover class, with the anchored rubric given above.
+
+\strong{Cover x use rows} (935 x 47). They are derived, not scored again:
+each (cover, use) pair is linked to one or several EUNIS Level 2 classes
+by \code{\link{ref_ocsge_eunis}}, and takes the mean of their
+\code{\link{eunis_species_dict}} scores weighted by \code{1 / rank}. For
+instance herbaceous cover under agricultural use (\code{CS2.2.1},
+\code{US1.1}) is mostly arable land (\code{I1}, rank 1) but may be permanent
+grassland (\code{E2}, rank 2). Only the pairs listed in
+\code{ref_ocsge_eunis} have a row; for any other pair use the cover row,
+which is what \code{\link{join_ocsge_species}} does.
+
+These are expert-judgement scores and have not been validated against
+occurrence data. They were checked against the keywords of the EEA habitat,
+avoided-habitat and threat descriptions
+(\code{raw_data/check_ocsge_species_dict.R} of the source repository):
+species naming a habitat score higher on the matching class than the
+others, with a probability of 0.57 to 0.93 depending on the habitat for
+cover rows, and 0.68 to 0.93 for cover x use rows. The use helps most for
+gardens and parks (0.57 to 0.80), quarries (0.69 to 0.93) and arable land
+(0.74 to 0.77).
+
+\strong{Change from spacemodR 0.3.0.} The dictionary used to hold scores
+from another model for the cover classes only, in the columns
+\code{weight_global}, \code{weight_movement}, \code{weight_foraging} and
+\code{resistance} (1-10), with \code{nom_espece} and cover codes written
+with a space (\code{"CS 2.2.1"}). \code{suitability} replaces
+\code{weight_global} and \code{permeability} replaces
+\code{weight_movement}; values differ (Spearman correlation 0.72 for
+suitability, 0.22 for movement, mostly because flying species were scored
+as if they walked) and are lower on classes that are not habitat.
 }
 \examples{
 data(ocsge_species_dict)
+apsy <- subset(ocsge_species_dict, species_name == "Apodemus_sylvaticus")
+
+# scores of each cover, whatever its use
+subset(apsy, is.na(code_us), c(code_cs, suitability, permeability, resistance))
+
+# herbaceous cover, by use
+subset(apsy, code_cs == "CS2.2.1", c(code_us, suitability, weight_foraging))
+
+}
+\references{
+The species list and the habitat descriptions come from:
+
+O'Connor, L. M. J., Renaud, J., Dou, Y., Karger, D. N., Maiorano, L., Verburg, P. H., &
+Thuiller, W. (2024). Habitat Suitability of European Land Systems for Terrestrial Vertebrates.
+\emph{Global Ecology and Biogeography}, 33(11), e13903.
+}
+\seealso{
+\code{\link{join_ocsge_species}}, \code{\link{ref_ocsge}},
+\code{\link{ref_ocsge_eunis}}, \code{\link{eunis_species_dict}}
 }
 \keyword{datasets}

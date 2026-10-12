@@ -18,10 +18,12 @@ This function takes a region of interest (ROI) as an `sf` or `sfc` object
 and returns the codes of departments intersecting this region.
 }
 \examples{
+\donttest{
 library(sf)
 roi <- sf::st_as_sfc(sf::st_bbox(
   c(xmin = 600000, ymin = 6600000, xmax = 650000, ymax = 6650000),
   crs = 2154)
 )
 departments <- get_departements_for_roi(roi)
+}
 }

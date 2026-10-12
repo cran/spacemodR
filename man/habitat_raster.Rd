@@ -2,18 +2,87 @@
 % Please edit documentation in R/habitat.R
 \name{habitat_raster}
 \alias{habitat_raster}
-\title{Create a raster from a habitat object}
+\title{Rasterize a Habitat Object}
 \usage{
 habitat_raster(ground_raster, habitat)
 }
 \arguments{
-\item{ground_raster}{SpatRaster (reference grid).}
+\item{ground_raster}{A \code{terra::SpatRaster} object used as a reference template.
+It provides the extent, resolution, and coordinate reference system (CRS).}
 
-\item{habitat}{habitat object inherited from \code{sf} data.frame class.}
+\item{habitat}{A \code{habitat} object (inheriting from \code{sf}).}
 }
 \value{
-SpatRaster (weight and NA in nogo)
+A \code{terra::SpatRaster} containing habitat weights, with \code{NA} values
+  in explicit non-habitat zones.
 }
 \description{
-Create a raster from a habitat object
+Converts a spatial \code{habitat} object into a \code{terra::SpatRaster}. The resulting
+raster stores the \code{weight} values of the habitat geometries. Areas explicitly
+defined as non-habitat (\code{habitat = FALSE}) are assigned \code{NA}.
+}
+\details{
+The function maps the continuous or categorical weights of the habitat geometries onto a raster grid.
+
+\strong{Background handling:} By default, pixels not covered by any geometry are assigned
+a weight of \code{0} and are considered passable (habitat = \code{TRUE}).
+
+\strong{Exclusion zones:} Geometries added via \code{add_nohabitat()} act as absolute
+barriers. Any pixel intersecting these geometries will be assigned \code{NA}, overriding
+any underlying weight.
+
+\strong{Stacking order:} Where several features overlap, the pixel takes the value of
+the feature with the highest \code{priority} (see \code{\link{add_habitat}}); features
+are stacked from the lowest to the highest priority and the top one is read. With equal
+priorities, the order of the features in the \code{habitat} object decides (last on
+top). As \code{add_habitat()} and \code{add_nohabitat()} give by default an increasing
+priority to each new layer, layers stack in the order they were added unless
+\code{priority} is set explicitly. The same rule applies to exclusion zones: a
+non-habitat feature excludes a pixel only if no feature of higher priority covers it.
+
+\strong{Pixels filled by a feature:} The \code{touches} value of each feature (see
+\code{\link{add_habitat}}) sets which pixels it occupies. With \code{touches = TRUE}
+(the default of \code{add_habitat()} and \code{add_nohabitat()}) a line or a polygon
+fills every pixel it touches. A thin structure such as a hedgerow, a river or a road
+is then a chain of pixels sharing an edge: a corridor stays connected for 4-neighbour
+movements and a barrier cannot be crossed diagonally. With \code{touches = FALSE}, a
+polygon fills only the pixels whose centre it covers and a line only the pixels of a
+thin line, which keeps areas unbiased but can break thin structures. Combine a high
+\code{priority} with \code{touches = TRUE} to keep a thin structure continuous above
+the layers it runs through. Points, lines and polygons can be mixed in the same
+\code{habitat} object.
+
+Note that a raster holds one value per pixel: a structure narrower than a pixel is
+either widened to a full pixel or dropped, and two structures sharing a pixel cannot
+both be kept. When this matters, the only real solution is a finer
+\code{ground_raster}.
+}
+\examples{
+library(terra)
+library(sf)
+
+# Create a dummy reference raster
+ref_grid <- rast(nrows=10, ncols=10, xmin=0, xmax=10, ymin=0, ymax=10)
+
+# Create habitat zones
+good_hab <- st_sf(geometry = st_sfc(st_polygon(list(cbind(c(1, 9, 9, 1, 1), c(1, 1, 9, 9, 1))))))
+bad_hab  <- st_sf(geometry = st_sfc(st_polygon(list(cbind(c(4, 6, 6, 4, 4), c(4, 4, 6, 6, 4))))))
+
+# Build habitat object
+my_habitat <- habitat() |>
+  add_habitat(good_hab, weight = 0.8) |>
+  add_nohabitat(bad_hab)
+
+# Rasterize
+hab_rast <- habitat_raster(ref_grid, my_habitat)
+plot(hab_rast)
+
+# A hedgerow kept continuous across the exclusion zone, whatever the order
+# in which the layers are added
+hedge <- st_sf(geometry = st_sfc(st_linestring(cbind(c(0, 10), c(0.2, 9.7)))))
+my_habitat <- habitat() |>
+  add_habitat(hedge, weight = 1, priority = 10) |>
+  add_habitat(good_hab, weight = 0.8, priority = 1, touches = FALSE) |>
+  add_nohabitat(bad_hab, priority = 2)
+plot(habitat_raster(ref_grid, my_habitat))
 }

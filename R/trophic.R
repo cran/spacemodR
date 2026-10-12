@@ -285,6 +285,7 @@ compute_levels <- function(edges) {
   validate_trophic_tbl(res)
 }
 
+
 #' Plot a trophic table
 #'
 #' Creates a simple graphical representation of a trophic network using ggplot2.
@@ -292,6 +293,13 @@ compute_levels <- function(edges) {
 #' @param x A \code{trophic_tbl} object.
 #' @param shift To shift x_axis between trophic level and avoid
 #'   the potential overlapping of arrows.
+#' @param colors A named character vector of colors (hexadecimal or standard R color names)
+#'   where the names match the node names in the trophic table. If NULL, default
+#'   ggplot2 colors are used.
+#' @param edge_width A character string indicating how to scale the width of the arrows.
+#'   Must be one of "none" (default), "raw" (uses the raw weights), "norm_target"
+#'   (normalizes weights to sum to 1 for each target/to node), or "norm_source"
+#'   (normalizes weights to sum to 1 for each source/from node).
 #' @param ... Additional arguments (not used, for S3 consistency).
 #'
 #' @details
@@ -310,10 +318,20 @@ compute_levels <- function(edges) {
 #'   add_link("a", "b") |>
 #'   add_link("b", "c")
 #'
+#' # Plot with default colors
 #' plot(net)
 #'
+#' # Plot with custom colors
+#' my_pal <- c("a" = "brown", "b" = "green", "c" = "blue")
+#' plot(net, colors = my_pal)
+#'
 #' @export
-plot.trophic_tbl <- function(x, shift=TRUE, ...) {
+plot.trophic_tbl <- function(x, shift = TRUE, colors = NULL,
+                             edge_width = c("none", "raw", "norm_target", "norm_source"),
+                             ...) {
+
+  edge_width <- match.arg(edge_width)
+
   stopifnot(inherits(x, "trophic_tbl"))
 
   levels <- attr(x, "level")
@@ -323,7 +341,7 @@ plot.trophic_tbl <- function(x, shift=TRUE, ...) {
   node_df <- do.call(rbind, lapply(unique(levels), function(lvl) {
     nds <- nodes[levels == lvl]
     shuff <- ifelse(shift, 1/max(levels)^2 * lvl^2/2, 0)
-    center <- 1 + (max(length(nds)) -1) /2 # default was -1
+    center <- 1 + (max(length(nds)) - 1) / 2
     data.frame(
       node = nds,
       x = seq_along(nds) - center + shuff,
@@ -336,14 +354,29 @@ plot.trophic_tbl <- function(x, shift=TRUE, ...) {
   edges <- data.frame(
     from = sapply(x$link, `[[`, "from"),
     to   = sapply(x$link, `[[`, "to"),
+    weight = x$weight,
     stringsAsFactors = FALSE
   )
 
+  # Calcul des poids d'affichage selon l'option choisie
+  if (edge_width == "norm_target") {
+    sums_to <- tapply(edges$weight, edges$to, sum)
+    edges$plot_weight <- edges$weight / sums_to[edges$to]
+    legend_name <- "Weight\n(Norm. Target)"
+  } else if (edge_width == "norm_source") {
+    sums_from <- tapply(edges$weight, edges$from, sum)
+    edges$plot_weight <- edges$weight / sums_from[edges$from]
+    legend_name <- "Weight\n(Norm. Source)"
+  } else if (edge_width == "raw") {
+    edges$plot_weight <- edges$weight
+    legend_name <- "Weight\n(Raw)"
+  }
+
   # Merge pour récupérer les coordonnées numériques
   edges <- merge(edges, node_df, by.x = "from", by.y = "node")
-  edges <- merge(edges, node_df, by.x = "to", by.y = "node", suffixes = c("_from","_to"))
+  edges <- merge(edges, node_df, by.x = "to", by.y = "node", suffixes = c("_from", "_to"))
 
-  # Forcer les coordonnées à numeric (par sécurité)
+  # Forcer les coordonnées à numeric
   edges$x_from <- as.numeric(edges$x_from)
   edges$y_from <- as.numeric(edges$y_from)
   edges$x_to   <- as.numeric(edges$x_to)
@@ -352,36 +385,59 @@ plot.trophic_tbl <- function(x, shift=TRUE, ...) {
   node_df$x <- as.numeric(node_df$x)
   node_df$y <- as.numeric(node_df$y)
 
+  # Construction de base du graphique
+  p <- ggplot2::ggplot()
 
-  ggplot2::ggplot() +
-    # arêtes orientées
-    ggplot2::geom_segment(
-      data = edges,
-      ggplot2::aes(x = x_from, y = y_from, xend = x_to, yend = y_to),
-      arrow = ggplot2::arrow(length = ggplot2::unit(0.2, "cm"))
-    ) +
-    # noeuds
+  if (edge_width != "none") {
+    p <- p +
+      ggplot2::geom_segment(
+        data = edges,
+        ggplot2::aes(x = x_from, y = y_from, xend = x_to, yend = y_to, linewidth = plot_weight),
+        arrow = ggplot2::arrow(length = ggplot2::unit(0.2, "cm")),
+        color = "grey40"
+      ) +
+      ggplot2::scale_linewidth_continuous(range = c(0.5, 3), name = legend_name)
+  } else {
+    p <- p +
+      ggplot2::geom_segment(
+        data = edges,
+        ggplot2::aes(x = x_from, y = y_from, xend = x_to, yend = y_to),
+        arrow = ggplot2::arrow(length = ggplot2::unit(0.2, "cm")),
+        color = "grey40"
+      )
+  }
+
+  p <- p +
     ggplot2::geom_point(
       data = node_df,
-      ggplot2::aes(x = x, y = y),
-      alpha=0.6, color="grey",
-      size = 4
+      ggplot2::aes(x = x, y = y, color = node),
+      alpha = 0.8,
+      size = 6
     ) +
-    # labels
     ggplot2::geom_text(
       data = node_df,
-      ggplot2::aes(x = x, y = y, label = node),
-      vjust = -1
+      ggplot2::aes(x = x, y = y, label = node, color = node),
+      vjust = -1.2,
+      fontface = "bold",
+      show.legend = FALSE
     ) +
     ggplot2::scale_y_continuous(
       breaks = sort(unique(levels)),
-      limits = c(1,max(levels)+0.5)) +
+      limits = c(1, max(levels) + 0.5)
+    ) +
     ggplot2::labs(
       x = "Node index within trophic level",
       y = "Trophic level",
-      title = "Trophic network"
+      title = "Trophic network",
+      color = "Species"
     ) +
     ggplot2::theme_minimal()
+
+  if (!is.null(colors)) {
+    p <- p + ggplot2::scale_color_manual(values = colors)
+  }
+
+  return(p)
 }
 
 ####################################

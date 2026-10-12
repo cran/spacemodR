@@ -4,7 +4,13 @@
 \alias{habitat}
 \title{Create a Habitat object}
 \usage{
-habitat(geometry = NULL, habitat = NULL, weight = NULL)
+habitat(
+  geometry = NULL,
+  habitat = NULL,
+  weight = NULL,
+  priority = NULL,
+  touches = NULL
+)
 }
 \arguments{
 \item{geometry}{An object of class \code{sf} or \code{sfc}. Optional, default is empty.}
@@ -12,6 +18,17 @@ habitat(geometry = NULL, habitat = NULL, weight = NULL)
 \item{habitat}{Logical vector indicating habitat presence. Default is logical(0).}
 
 \item{weight}{Numeric vector of weights. Default is numeric(0).}
+
+\item{priority}{Numeric vector giving the stacking order of the features when
+they are rasterized with \code{\link{habitat_raster}}: where features overlap,
+the one with the highest priority gives its value to the pixel. Default is
+\code{1} for every feature, in which case the order of the features decides
+(last on top).}
+
+\item{touches}{Logical vector. If \code{TRUE} (default), a feature fills every
+pixel it touches when rasterized with \code{\link{habitat_raster}}. If
+\code{FALSE}, a polygon only fills the pixels whose centre it covers and a line
+only the pixels of a thin line. See \code{\link{add_habitat}} for guidance.}
 }
 \value{
 An object of class \code{habitat}, inheriting from \code{sf} and \code{data.frame}.
@@ -23,6 +40,8 @@ The object has columns:
 \itemize{
   \item \code{habitat}: logical, TRUE/FALSE
   \item \code{weight}: numeric
+  \item \code{priority}: numeric, stacking order used by \code{\link{habitat_raster}}
+  \item \code{touches}: logical, pixels filled by the feature in \code{\link{habitat_raster}}
   \item \code{geometry}: sfc geometry
 }
 }

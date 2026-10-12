@@ -14,15 +14,24 @@
 #' Use only the first geometry (polygon).
 #' @return A character vector containing the codes of departments intersecting the region of interest.
 #' @examples
+#' \donttest{
 #' library(sf)
 #' roi <- sf::st_as_sfc(sf::st_bbox(
 #'   c(xmin = 600000, ymin = 6600000, xmax = 650000, ymax = 6650000),
 #'   crs = 2154)
 #' )
 #' departments <- get_departements_for_roi(roi)
+#' }
 #' @export
 get_departements_for_roi <- function(roi) {
-  response <- httr::GET(.dpt_url)
+  # The remote server can be slow or temporarily unavailable: retry and fail
+  # with an explicit message instead of parsing an HTML error page as GeoJSON.
+  response <- httr::RETRY("GET", .dpt_url, httr::timeout(60), times = 3,
+                          quiet = TRUE)
+  if (httr::http_error(response)) {
+    stop(sprintf("Failed to download French departments from %s (HTTP %s).",
+                 .dpt_url, httr::status_code(response)), call. = FALSE)
+  }
   dpts <- sf::st_read(
     rawToChar(httr::content(response, "raw")),
     quiet = TRUE
